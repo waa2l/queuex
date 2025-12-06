@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Save, Activity, UserMd, Settings, Monitor } from 'lucide-react';
+import { Plus, Trash2, Save, Activity, Stethoscope, Settings, Monitor } from 'lucide-react';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('clinics');
@@ -10,28 +10,30 @@ export default function AdminPage() {
   const [clinics, setClinics] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>({});
-  const [screens, setScreens] = useState<any[]>([]);
-const [newScreenName, setNewScreenName] = useState('');
-const [selectedScreenForEdit, setSelectedScreenForEdit] = useState<any>(null);
   
   // Form Inputs
   const [newClinicName, setNewClinicName] = useState('');
   const [newDoc, setNewDoc] = useState({ name: '', specialty: '', image_url: '' });
 
-  // 1. Fetch Data
+  // 1. Fetch Data (جلب البيانات)
   const fetchData = async () => {
+    // جلب العيادات
     const { data: cData } = await supabase.from('clinics').select('*').order('created_at');
     if (cData) setClinics(cData);
 
+    // جلب الأطباء
     const { data: dData } = await supabase.from('doctors').select('*').order('created_at');
     if (dData) setDoctors(dData);
 
+    // جلب الإعدادات
     const { data: sData } = await supabase.from('settings').select('*').single();
     if (sData) setSettings(sData);
     else {
-        // Create default settings if not exists
+        // إنشاء إعدادات افتراضية إذا لم تكن موجودة
         await supabase.from('settings').insert([{}]);
-        fetchData(); // Retry
+        // إعادة المحاولة
+        const { data: retryS } = await supabase.from('settings').select('*').single();
+        if(retryS) setSettings(retryS);
     }
   };
 
@@ -64,17 +66,9 @@ const [selectedScreenForEdit, setSelectedScreenForEdit] = useState<any>(null);
     fetchData();
   };
 
-const fetchScreens = async () => {
-    // جلب الشاشات مع العيادات المرتبطة بها
-    const { data } = await supabase.from('screens').select('*, screen_clinics(clinic_id)');
-    if (data) setScreens(data);
-};
-// (لا تنس استدعاء fetchScreens داخل useEffect الرئيسي)
-
-
-  
   // --- Settings Logic ---
   const saveSettings = async () => {
+    if (!settings.id) return;
     await supabase.from('settings').update({
         center_name: settings.center_name,
         ticker_text: settings.ticker_text,
@@ -96,7 +90,7 @@ const fetchScreens = async () => {
         
         <button onClick={() => setActiveTab('doctors')} 
           className={`flex items-center gap-3 p-3 rounded transition ${activeTab === 'doctors' ? 'bg-blue-600' : 'hover:bg-slate-800'}`}>
-          <UserMd size={20}/> الأطباء
+          <Stethoscope size={20}/> الأطباء
         </button>
         
         <button onClick={() => setActiveTab('settings')} 
@@ -156,76 +150,7 @@ const fetchScreens = async () => {
             </div>
           </div>
         )}
-{/* زر التبويب في القائمة الجانبية */}
-<button onClick={() => setActiveTab('screens')} 
-  className={`flex items-center gap-3 p-3 rounded transition ${activeTab === 'screens' ? 'bg-blue-600' : 'hover:bg-slate-800'}`}>
-  <Monitor size={20}/> الشاشات
-</button>
 
-{/* محتوى التبويب */}
-{activeTab === 'screens' && (
-  <div className="animate-in fade-in">
-    <h2 className="text-3xl font-bold text-gray-800 mb-6">تخصيص الشاشات</h2>
-    
-    {/* إضافة شاشة جديدة */}
-    <div className="bg-white p-6 rounded-xl shadow-sm mb-6 flex gap-4">
-      <input type="text" placeholder="اسم الشاشة (مثال: شاشة الطوارئ)" className="flex-1 p-3 border rounded-lg text-black"
-        value={newScreenName} onChange={(e) => setNewScreenName(e.target.value)} />
-      <button onClick={async () => {
-          if(!newScreenName) return;
-          await supabase.from('screens').insert([{ name: newScreenName }]);
-          setNewScreenName(''); fetchScreens();
-      }} className="bg-purple-600 text-white px-6 py-3 rounded-lg font-bold">إنشاء شاشة</button>
-    </div>
-
-    {/* قائمة الشاشات */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {screens.map((screen) => (
-        <div key={screen.id} className="bg-white p-4 rounded-xl shadow border border-gray-200">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-                <h3 className="font-bold text-lg text-black">{screen.name}</h3>
-                <p className="text-xs text-gray-400 select-all">ID: {screen.id}</p>
-                <a href={`/display/${screen.id}`} target="_blank" className="text-blue-500 text-xs hover:underline">فتح الشاشة ↗</a>
-            </div>
-            <button onClick={async () => {
-                if(!confirm('حذف الشاشة؟')) return;
-                await supabase.from('screens').delete().eq('id', screen.id);
-                fetchScreens();
-            }} className="text-red-400"><Trash2 size={16}/></button>
-          </div>
-
-          {/* اختيار العيادات لهذه الشاشة */}
-          <div className="border-t pt-2">
-            <p className="text-sm font-bold mb-2 text-gray-600">العيادات الظاهرة:</p>
-            <div className="flex flex-wrap gap-2">
-                {clinics.map(clinic => {
-                    const isLinked = screen.screen_clinics?.some((sc: any) => sc.clinic_id === clinic.id);
-                    return (
-                        <button key={clinic.id} 
-                            onClick={async () => {
-                                if (isLinked) {
-                                    // حذف الربط
-                                    await supabase.from('screen_clinics').delete().match({ screen_id: screen.id, clinic_id: clinic.id });
-                                } else {
-                                    // إضافة الربط
-                                    await supabase.from('screen_clinics').insert([{ screen_id: screen.id, clinic_id: clinic.id }]);
-                                }
-                                fetchScreens();
-                            }}
-                            className={`px-2 py-1 rounded text-xs border ${isLinked ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-500 border-gray-300'}`}
-                        >
-                            {clinic.name}
-                        </button>
-                    )
-                })}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
         {/* === تبويب الإعدادات === */}
         {activeTab === 'settings' && (
           <div className="animate-in fade-in">
