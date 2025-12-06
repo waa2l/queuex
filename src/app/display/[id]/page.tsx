@@ -52,6 +52,32 @@ export default function DisplayPage({ params }: { params: { id: string } }) {
         }
     };
 
+
+    // الاستماع للإشعارات
+const notifChannel = supabase.channel('public:notifications')
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+    const notif = payload.new;
+    // التحقق هل الإشعار لهذه العيادة أو عام للكل
+    // (هنا تحتاج لمنطق بسيط لمعرفة هل الشاشة تعرض العيادة المستهدفة أم لا)
+    
+    if (notif.type === 'voice' && notif.payload) {
+        new Audio(notif.payload).play(); // تشغيل الصوت المسجل
+    }
+    if (notif.type === 'emergency') {
+        new Audio('/audio/alarm.mp3').play();
+        alert(`🚨 ${notif.message}`); // أو إظهار نافذة طوارئ كبيرة
+    }
+    if (notif.type === 'alert') {
+        // نطق الرسالة
+        const u = new SpeechSynthesisUtterance(notif.message);
+        u.lang = 'ar-SA';
+        window.speechSynthesis.speak(u);
+    }
+  })
+  .subscribe();
+
+// لا تنس تنظيف القناة عند الخروج
+// return () => { supabase.removeChannel(notifChannel) ... }
     initData();
 
     // Realtime Subscription
