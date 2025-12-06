@@ -1,8 +1,7 @@
 'use client';
-import { useState, useEffect } from 'react'; ///page.tsx]
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toArabicNums } from '@/lib/utils';
-// ... باقي الـ imports كما هي (Play, Pause, Lock, etc...)
 import { 
   Play, Pause, StepForward, StepBack, RotateCcw, Lock, 
   Mic, Bell, ArrowRightLeft, AlertTriangle, Hash, Repeat, User, LogOut 
@@ -32,6 +31,7 @@ export default function ControlPage({ params }: { params: { id: string } }) {
     const init = async () => {
       const { data: c } = await supabase.from('clinics').select('*').eq('id', params.id).single();
       if (c) setClinic(c);
+      
       const { data: all } = await supabase.from('clinics').select('id, name').neq('id', params.id);
       if (all) setClinicsList(all);
     };
@@ -49,23 +49,17 @@ export default function ControlPage({ params }: { params: { id: string } }) {
     e.preventDefault();
     if (clinic && passwordInput === clinic.control_password) {
         setIsAuthenticated(true);
-        // حفظ الدخول للمستقبل
         localStorage.setItem(`auth_${params.id}`, 'true');
     }
     else alert('كلمة المرور غير صحيحة');
   };
   
-  // دالة الخروج
   const handleLogout = () => {
       setIsAuthenticated(false);
       localStorage.removeItem(`auth_${params.id}`);
-      // اختياري: العودة لصفحة الدخول الرئيسية
-      // window.location.href = '/login';
   };
 
-  // ... باقي دوال التحكم (updateNumber, sendNotification) اتركها كما هي في الكود السابق ...
-  // فقط تأكد من تعريفها هنا لاستخدامها في الـ Return بالأسفل
-  const updateNumber = async (action: any) => { /* نفس الكود السابق */ 
+  const updateNumber = async (action: any) => {
       if (!clinic) return;
       setLoading(true);
       let newNum = clinic.current_number;
@@ -85,19 +79,29 @@ export default function ControlPage({ params }: { params: { id: string } }) {
       setLoading(false); setModalType(null); setInputValue('');
   };
 
-  const sendNotification = async (type: string, payload?: string, targetId?: string) => { /* نفس الكود السابق */ 
+  const sendNotification = async (type: string, payload?: string, targetId?: string) => {
       await supabase.from('notifications').insert([{
         type, target_clinic_id: targetId || clinic.id, message: payload, payload: payload
       }]);
       setModalType(null); setInputValue(''); setMsg('تم الإرسال'); setTimeout(() => setMsg(''), 3000);
   };
 
+  // --- [FIX] شاشة التحميل لمنع الخطأ ---
+  if (!clinic) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-xl font-bold">جاري الاتصال بالعيادة...</p>
+      </div>
+    );
+  }
+
   // --- واجهة تسجيل الدخول (إذا لم يدخل) ---
   if (!isAuthenticated) return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
       <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center">
         <Lock className="mx-auto text-blue-600 mb-4" size={40} />
-        <h2 className="text-xl font-bold mb-4">{clinic?.name || 'تحميل...'}</h2>
+        <h2 className="text-xl font-bold mb-4">{clinic.name}</h2>
         <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} 
           className="w-full p-3 border rounded mb-4 text-center text-black" placeholder="كلمة المرور" autoFocus />
         <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded font-bold">دخول</button>
@@ -120,10 +124,8 @@ export default function ControlPage({ params }: { params: { id: string } }) {
         <div className="text-4xl font-mono font-black text-blue-700">{toArabicNums(clinic.current_number)}</div>
       </header>
 
-      {/* الأزرار وباقي الصفحة كما هي تماماً من الرد السابق... */}
       {/* Grid Actions */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {/* ... أزرار التحكم السابقة ... */}
         <button onClick={() => updateNumber('next')} className="bg-blue-600 text-white p-6 rounded-xl font-bold text-lg flex flex-col items-center gap-2 hover:bg-blue-700 col-span-2">
             <StepForward size={32} /> العميل التالي
         </button>
@@ -160,11 +162,10 @@ export default function ControlPage({ params }: { params: { id: string } }) {
         </button>
       </div>
 
-      {/* ... باقي المودالز والنوافذ المنبثقة كما هي في الرد السابق ... */}
+      {/* Modals */}
       {modalType && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white p-6 rounded-2xl w-full max-w-sm text-black">
-                {/* ... محتوى المودال كما هو ... */}
                 <h3 className="text-xl font-bold mb-4 text-center">خيارات</h3>
                  {(modalType === 'number') && <input type="number" className="w-full p-3 border rounded mb-4 text-center text-xl" autoFocus value={inputValue} onChange={e => setInputValue(e.target.value)} placeholder="رقم العميل" />}
                  {(modalType === 'alert_patient' || modalType === 'alert_control') && <input type="text" className="w-full p-3 border rounded mb-4" autoFocus value={inputValue} onChange={e => setInputValue(e.target.value)} placeholder="الرسالة/الاسم" />}
