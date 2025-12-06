@@ -2,13 +2,18 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toArabicNums } from '@/lib/utils';
-import { Play, Pause, StepForward, RotateCcw } from 'lucide-react';
+import { Play, Pause, StepForward, RotateCcw, Lock } from 'lucide-react';
 
 export default function ControlPage({ params }: { params: { id: string } }) {
   const [clinic, setClinic] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState(false);
 
-  // جلب بيانات العيادة
+  // جلب بيانات العيادة (بدون كلمة السر في البداية للأمان، لكن للتسهيل سنجلبها ونقارن محلياً أو الأفضل عبر API، هنا سنقارن محلياً للتبسيط)
   useEffect(() => {
     const fetchClinic = async () => {
       const { data } = await supabase.from('clinics').select('*').eq('id', params.id).single();
@@ -16,6 +21,16 @@ export default function ControlPage({ params }: { params: { id: string } }) {
     };
     fetchClinic();
   }, [params.id]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (clinic && passwordInput === clinic.control_password) {
+      setIsAuthenticated(true);
+      setAuthError(false);
+    } else {
+      setAuthError(true);
+    }
+  };
 
   const updateNumber = async (action: 'next' | 'prev' | 'reset') => {
     if (!clinic) return;
@@ -45,10 +60,45 @@ export default function ControlPage({ params }: { params: { id: string } }) {
 
   if (!clinic) return <div className="p-10 text-center">جاري التحميل...</div>;
 
+  // --- شاشة تسجيل الدخول ---
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm text-center">
+          <div className="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+            <Lock size={32} />
+          </div>
+          <h2 className="text-xl font-bold mb-2 text-gray-800">الدخول للعيادة</h2>
+          <p className="text-gray-500 mb-6">{clinic.name}</p>
+          
+          <input 
+            type="password" 
+            placeholder="كلمة المرور" 
+            className="w-full p-3 border rounded-lg mb-4 text-center text-lg outline-none focus:ring-2 ring-blue-500"
+            value={passwordInput}
+            onChange={e => setPasswordInput(e.target.value)}
+            autoFocus
+          />
+          
+          {authError && <p className="text-red-500 text-sm mb-4">كلمة المرور غير صحيحة</p>}
+          
+          <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700">
+            دخول
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // --- واجهة التحكم الرئيسية ---
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">{clinic.name}</h1>
+        <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">{clinic.name}</h1>
+            <button onClick={() => setIsAuthenticated(false)} className="text-sm text-red-500 hover:underline">خروج</button>
+        </div>
+        
         <div className={`inline-block px-3 py-1 rounded-full text-sm mb-6 ${clinic.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
             {clinic.status === 'active' ? 'نشطة' : 'متوقفة'}
         </div>
@@ -62,7 +112,7 @@ export default function ControlPage({ params }: { params: { id: string } }) {
                 onClick={() => updateNumber('next')}
                 disabled={loading}
                 className="col-span-2 bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-xl font-bold flex items-center justify-center gap-2 shadow-lg active:scale-95 transition">
-                <StepForward /> التالي
+                <StepForward /> نداء التالي
             </button>
 
             <button 
